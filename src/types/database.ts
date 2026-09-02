@@ -585,6 +585,7 @@ export type Database = {
         }
         Returns: string
       }
+      has_accepted_proposal: { Args: { p_post_id: string }; Returns: boolean }
       is_verified_student: { Args: never; Returns: boolean }
       owns_post: { Args: { p_id: string }; Returns: boolean }
     }

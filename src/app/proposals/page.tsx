@@ -38,14 +38,14 @@ export default async function ProposalsPage() {
     supabase
       .from("proposals")
       .select(
-        "id, post_id, cash_delta_cents, status, created_at, posts ( id, author_id, profiles_public ( display_name ) )",
+        "id, post_id, cash_delta_cents, status, created_at, posts ( id, author_id, profiles_public ( display_name ) ), handoffs ( id )",
       )
       .eq("proposer_id", user.id)
       .order("created_at", { ascending: false }),
     supabase
       .from("proposals")
       .select(
-        "id, post_id, cash_delta_cents, status, created_at, profiles_public ( display_name ), posts!inner ( id, author_id )",
+        "id, post_id, cash_delta_cents, status, created_at, profiles_public ( display_name ), posts!inner ( id, author_id ), handoffs ( id )",
       )
       .eq("posts.author_id", user.id)
       .order("created_at", { ascending: false }),
@@ -89,6 +89,14 @@ export default async function ProposalsPage() {
               </p>
               {proposal.status === "pending" ? (
                 <ProposalStatusButtons proposalId={proposal.id} role="author" />
+              ) : null}
+              {proposal.status === "accepted" && proposal.handoffs ? (
+                <Link
+                  href={`/handoffs/${proposal.handoffs.id}`}
+                  className="mt-2 inline-block text-sm font-medium text-orange-600 underline"
+                >
+                  View handoff
+                </Link>
               ) : null}
             </li>
           ))}
@@ -135,6 +143,14 @@ export default async function ProposalsPage() {
                   proposalId={proposal.id}
                   role="proposer"
                 />
+              ) : null}
+              {proposal.status === "accepted" && proposal.handoffs ? (
+                <Link
+                  href={`/handoffs/${proposal.handoffs.id}`}
+                  className="mt-2 inline-block text-sm font-medium text-orange-600 underline"
+                >
+                  View handoff
+                </Link>
               ) : null}
             </li>
           ))}

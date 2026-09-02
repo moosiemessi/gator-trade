@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ProposeForm } from "./propose-form";
@@ -112,7 +113,8 @@ export default async function PostDetailPage({
             id, ticket_type, section_code, row_label, seat_labels, quantity,
             games ( opponent, kickoff_at ),
             sections ( tier, level )
-          )
+          ),
+          handoffs ( id )
           `,
         )
         .eq("post_id", postId)
@@ -286,6 +288,14 @@ export default async function PostDetailPage({
                   proposalId={proposal.id}
                   role={isOwnPost ? "author" : "proposer"}
                 />
+              ) : null}
+              {proposal.status === "accepted" && proposal.handoffs ? (
+                <Link
+                  href={`/handoffs/${proposal.handoffs.id}`}
+                  className="mt-2 inline-block text-sm font-medium text-orange-600 underline"
+                >
+                  View handoff
+                </Link>
               ) : null}
             </li>
           ))}
