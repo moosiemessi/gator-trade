@@ -419,7 +419,7 @@ Already live on Amplify at https://main.d1ylz90b9t7gnv.amplifyapp.com and rebuil
 ```
 NEXT_PUBLIC_SUPABASE_URL
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-SUPABASE_SERVICE_ROLE_KEY      server only, never NEXT_PUBLIC
+SUPABASE_SECRET_KEY            server only, never NEXT_PUBLIC
 AWS_REGION                     us-east-2
 S3_BUCKET_NAME
 CLOUDFRONT_DOMAIN
