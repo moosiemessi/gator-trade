@@ -464,3 +464,11 @@ Ask rather than assume.
 1. Section tier assignments for Ben Hill Griffin Stadium. This needs his input, do not invent it.
 2. Should posts expire on a timer as well as at kickoff, for example after fourteen days of no activity?
 3. Should a user's completed trade count be shown publicly as a lightweight reputation signal?
+
+---
+
+## 13. Future ideas, not scheduled
+
+Not part of any build order step. Written down so they aren't lost, not because they're planned.
+
+- Per-game demand signal: derive it from the average `cash_delta_cents` across completed trades for that game, rather than a system-computed "value" or opponent-strength ranking. The market (what people actually pay to move up or take to move down) already captures demand better than a synthetic score would, including factors like night kickoffs or opponent quality that are otherwise hard to weight.
