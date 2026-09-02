@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { ProposeForm } from "./propose-form";
+import { ProposalStatusButtons } from "@/app/proposals/proposal-status-buttons";
 
 export const metadata: Metadata = {
   title: "Post | Gator Trade",
@@ -33,6 +35,13 @@ const STATUS_LABELS: Record<string, string> = {
   expired: "Expired",
 };
 
+const PROPOSAL_STATUS_LABELS: Record<string, string> = {
+  pending: "Pending",
+  accepted: "Accepted",
+  declined: "Declined",
+  withdrawn: "Withdrawn",
+};
+
 export default async function PostDetailPage({
   params,
 }: {
@@ -48,44 +57,90 @@ export default async function PostDetailPage({
     return null;
   }
 
-  const { data: post } = await supabase
-    .from("posts")
-    .select(
-      `
-      id, author_id, cash_delta_cents, status, notes, created_at,
-      profiles_public ( display_name ),
-      post_offer_items (
-        id, ticket_type, section_code, row_label, seat_labels, quantity,
-        games ( opponent, kickoff_at ),
-        sections ( tier, level )
-      ),
-      post_want_items (
-        id, acceptable_game_ids, min_tier, max_tier, quantity, require_together
+  const [{ data: post }, { data: profile }] = await Promise.all([
+    supabase
+      .from("posts")
+      .select(
+        `
+        id, author_id, cash_delta_cents, status, notes, created_at,
+        profiles_public ( display_name ),
+        post_offer_items (
+          id, ticket_type, section_code, row_label, seat_labels, quantity,
+          games ( opponent, kickoff_at ),
+          sections ( tier, level )
+        ),
+        post_want_items (
+          id, acceptable_game_ids, min_tier, max_tier, quantity, require_together
+        )
+        `,
       )
-      `,
-    )
-    .eq("id", postId)
-    .single();
+      .eq("id", postId)
+      .single(),
+    supabase.from("profiles").select("is_verified").eq("id", user.id).single(),
+  ]);
 
   if (!post) {
     notFound();
   }
 
-  const gameIds = new Set(
-    post.post_want_items.flatMap((slot) => slot.acceptable_game_ids),
-  );
-  const { data: wantGames } =
-    gameIds.size > 0
-      ? await supabase
-          .from("games")
-          .select("id, opponent")
-          .in("id", Array.from(gameIds))
-      : { data: [] };
-  const gameNameById = new Map(
-    (wantGames ?? []).map((g) => [g.id, g.opponent]),
-  );
-
   const isOwnPost = post.author_id === user.id;
+
+  const [{ data: wantGames }, { data: proposals }, { data: games }, { data: sections }] =
+    await Promise.all([
+      post.post_want_items.length > 0
+        ? supabase
+            .from("games")
+            .select("id, opponent")
+            .in(
+              "id",
+              Array.from(
+                new Set(
+                  post.post_want_items.flatMap((slot) => slot.acceptable_game_ids),
+                ),
+              ),
+            )
+        : Promise.resolve({ data: [] }),
+      // RLS scopes this naturally: the author sees every proposal on their
+      // post, anyone else sees only their own proposal(s) on it.
+      supabase
+        .from("proposals")
+        .select(
+          `
+          id, proposer_id, cash_delta_cents, message, status, created_at,
+          profiles_public ( display_name ),
+          proposal_items (
+            id, ticket_type, section_code, row_label, seat_labels, quantity,
+            games ( opponent, kickoff_at ),
+            sections ( tier, level )
+          )
+          `,
+        )
+        .eq("post_id", postId)
+        .order("created_at", { ascending: false }),
+      isOwnPost
+        ? Promise.resolve({ data: [] })
+        : supabase
+            .from("games")
+            .select("id, opponent")
+            .order("kickoff_at", { ascending: true }),
+      isOwnPost
+        ? Promise.resolve({ data: [] })
+        : supabase
+            .from("sections")
+            .select("code, tier, level")
+            .order("code", { ascending: true }),
+    ]);
+
+  const gameNameById = new Map((wantGames ?? []).map((g) => [g.id, g.opponent]));
+
+  const myPendingProposal = !isOwnPost
+    ? (proposals ?? []).find((p) => p.status === "pending")
+    : undefined;
+  const canPropose =
+    !isOwnPost &&
+    profile?.is_verified &&
+    post.status === "open" &&
+    !myPendingProposal;
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-12">
@@ -98,7 +153,10 @@ export default async function PostDetailPage({
         </span>
       </div>
       <p className="mt-1 text-sm text-gray-600">
-        Posted by {isOwnPost ? "you" : (post.profiles_public?.display_name ?? "a Gator Trade user")}
+        Posted by{" "}
+        {isOwnPost
+          ? "you"
+          : (post.profiles_public?.display_name ?? "a Gator Trade user")}
       </p>
 
       <section className="mt-8">
@@ -120,7 +178,9 @@ export default async function PostDetailPage({
                 {item.ticket_type === "general_admission"
                   ? "general admission"
                   : `Section ${item.section_code}${
-                      item.sections ? ` (tier ${item.sections.tier}, ${item.sections.level})` : ""
+                      item.sections
+                        ? ` (tier ${item.sections.tier}, ${item.sections.level})`
+                        : ""
                     }`}
                 {item.row_label ? `, row ${item.row_label}` : ""}
               </p>
@@ -133,9 +193,7 @@ export default async function PostDetailPage({
       </section>
 
       <section className="mt-8">
-        <h2 className="text-sm font-semibold text-gray-700">
-          Looking for
-        </h2>
+        <h2 className="text-sm font-semibold text-gray-700">Looking for</h2>
         {post.post_want_items.length === 0 ? (
           <p className="mt-2 text-sm text-gray-600">
             Cash only — no trade wanted.
@@ -154,8 +212,7 @@ export default async function PostDetailPage({
                     .join(" or ")}
                 </p>
                 <p>
-                  Tier{" "}
-                  {slot.min_tier ?? "any"}
+                  Tier {slot.min_tier ?? "any"}
                   {" – "}
                   {slot.max_tier ?? "any"}
                   {slot.require_together ? ", seats must be together" : ""}
@@ -172,6 +229,85 @@ export default async function PostDetailPage({
           <p className="mt-2 text-sm text-gray-600">{post.notes}</p>
         </section>
       ) : null}
+
+      <section className="mt-8">
+        <h2 className="text-sm font-semibold text-gray-700">
+          {isOwnPost ? "Proposals" : "Your proposal"}
+        </h2>
+
+        {isOwnPost && (proposals ?? []).length === 0 ? (
+          <p className="mt-2 text-sm text-gray-600">
+            No proposals yet.
+          </p>
+        ) : null}
+
+        <ul className="mt-2 space-y-3">
+          {(proposals ?? []).map((proposal) => (
+            <li
+              key={proposal.id}
+              className="rounded-md border border-gray-200 p-3 text-sm text-gray-700"
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-medium text-gray-900">
+                  {isOwnPost
+                    ? (proposal.profiles_public?.display_name ??
+                      "a Gator Trade user")
+                    : "You"}
+                </span>
+                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                  {PROPOSAL_STATUS_LABELS[proposal.status] ?? proposal.status}
+                </span>
+              </div>
+              <p className="mt-1">{formatCash(proposal.cash_delta_cents)}</p>
+              {proposal.proposal_items.length > 0 ? (
+                <ul className="mt-1 space-y-1">
+                  {proposal.proposal_items.map((item) => (
+                    <li key={item.id}>
+                      Offering {item.quantity}×{" "}
+                      {item.ticket_type === "general_admission"
+                        ? `general admission at ${item.games?.opponent ?? ""}`
+                        : `Section ${item.section_code}${
+                            item.sections ? ` (tier ${item.sections.tier})` : ""
+                          } at ${item.games?.opponent ?? ""}`}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-1 text-gray-500">Cash offer, no tickets</p>
+              )}
+              {proposal.message ? (
+                <p className="mt-1 italic text-gray-600">
+                  &ldquo;{proposal.message}&rdquo;
+                </p>
+              ) : null}
+
+              {proposal.status === "pending" ? (
+                <ProposalStatusButtons
+                  proposalId={proposal.id}
+                  role={isOwnPost ? "author" : "proposer"}
+                />
+              ) : null}
+            </li>
+          ))}
+        </ul>
+
+        {canPropose ? (
+          <div className="mt-4">
+            <ProposeForm
+              postId={post.id}
+              defaultCashDeltaCents={post.cash_delta_cents}
+              games={games ?? []}
+              sections={sections ?? []}
+            />
+          </div>
+        ) : null}
+
+        {!isOwnPost && !profile?.is_verified ? (
+          <p className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Confirm your ufl.edu email to send proposals.
+          </p>
+        ) : null}
+      </section>
     </main>
   );
 }

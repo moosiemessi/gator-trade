@@ -64,6 +64,12 @@ export default async function HomePage() {
             >
               My posts
             </Link>
+            <Link
+              href="/proposals"
+              className="inline-block rounded-md border border-gray-300 px-4 py-2 font-medium text-gray-700 transition hover:bg-gray-50"
+            >
+              Proposals
+            </Link>
           </div>
         </>
       )}

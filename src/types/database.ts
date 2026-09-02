@@ -576,6 +576,15 @@ export type Database = {
         }
         Returns: string
       }
+      create_proposal: {
+        Args: {
+          p_cash_delta_cents: number
+          p_items?: Json
+          p_message?: string
+          p_post_id: string
+        }
+        Returns: string
+      }
       is_verified_student: { Args: never; Returns: boolean }
       owns_post: { Args: { p_id: string }; Returns: boolean }
     }
