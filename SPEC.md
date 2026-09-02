@@ -102,7 +102,7 @@ Each want slot is one requirement and all slots must be satisfied for a proposal
 
 ## 5. Schema
 
-Eleven tables in `public`.
+Twelve tables in `public`.
 
 ### profiles
 
@@ -287,7 +287,7 @@ created_at        timestamptz not null default now()
 
 ## 6. Row level security
 
-Enable RLS on all eleven tables. A table with RLS on and no policy denies everything, which is the correct starting point.
+Enable RLS on all twelve tables. A table with RLS on and no policy denies everything, which is the correct starting point.
 
 ### Helper functions
 
@@ -433,7 +433,7 @@ Set these in Amplify environment variables. Commit `.env.example` with empty val
 
 Step 1 is done. Continue from step 2. Complete one step, verify it, commit, then move to the next. Do not run several steps together.
 
-2. Supabase project. Migrations for all eleven tables, enums, constraints, and indexes. Signup trigger for profiles. Verification trigger for `is_verified`. Generate database types.
+2. Supabase project. Migrations for all twelve tables, enums, constraints, and indexes. Signup trigger for profiles. Verification trigger for `is_verified`. Generate database types.
 3. Auth. Signup with the ufl.edu constraint, email confirmation, login, logout, protected routes, a clear pending-verification state.
 4. RLS policies and helper functions, then the multi user policy test file. Do not defer the tests.
 5. Seed scripts. Games for the current season and the sections table with tier assignments. Without these nothing else is testable.
