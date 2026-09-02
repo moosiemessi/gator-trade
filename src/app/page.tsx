@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "./actions";
@@ -40,9 +41,17 @@ export default async function HomePage() {
           marketplace.
         </div>
       ) : (
-        <p className="mt-6 text-gray-600">
-          Welcome back, {profile?.display_name ?? user.email}.
-        </p>
+        <>
+          <p className="mt-6 text-gray-600">
+            Welcome back, {profile?.display_name ?? user.email}.
+          </p>
+          <Link
+            href="/posts/new"
+            className="mt-6 inline-block rounded-md bg-orange-600 px-4 py-2 font-medium text-white transition hover:bg-orange-700"
+          >
+            Create a post
+          </Link>
+        </>
       )}
     </main>
   );
