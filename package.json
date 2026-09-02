@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "seed:dev": "tsx scripts/dev-seed.ts",
+    "seed:dev:wipe": "tsx scripts/dev-seed.ts --wipe"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.5",
@@ -26,6 +28,7 @@
     "eslint-config-next": "16.3.4",
     "supabase": "^2.116.0",
     "tailwindcss": "^4",
+    "tsx": "^4.23.13",
     "typescript": "^5",
     "vitest": "^4.1.11"
   }
