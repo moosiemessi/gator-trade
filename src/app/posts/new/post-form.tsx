@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { createPostSchema } from "@/lib/validation/posts";
+import { ImageUploader } from "@/components/post-images/image-uploader";
 import { createPost } from "./actions";
 
 type Game = {
@@ -80,6 +82,7 @@ export function PostForm({
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [createdPostId, setCreatedPostId] = useState<string | null>(null);
 
   function updateOfferItem(index: number, patch: Partial<OfferItemState>) {
     setOfferItems((items) =>
@@ -195,10 +198,32 @@ export function PostForm({
 
     startTransition(async () => {
       const result = await createPost(parsed.data);
-      if (result.error) {
+      if (result.error !== null) {
         setError(result.error);
+        return;
       }
+      setCreatedPostId(result.postId);
     });
+  }
+
+  if (createdPostId) {
+    return (
+      <div className="space-y-6">
+        <div className="rounded-md border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-800">
+          Post created. Add photos now, or skip and add them later from the
+          post page.
+        </div>
+        <ImageUploader postId={createdPostId} existingImages={[]} />
+        <div className="flex justify-end">
+          <Link
+            href={`/posts/${createdPostId}`}
+            className="rounded-md bg-orange-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-orange-700"
+          >
+            Done
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   return (

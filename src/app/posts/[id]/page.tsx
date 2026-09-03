@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { postImageUrl } from "@/lib/aws/cloudfront";
+import { ImageUploader } from "@/components/post-images/image-uploader";
+import { PostImageGallery } from "@/components/post-images/post-image-gallery";
 import { ProposeForm } from "./propose-form";
 import { ProposalStatusButtons } from "@/app/proposals/proposal-status-buttons";
 
@@ -72,6 +75,9 @@ export default async function PostDetailPage({
         ),
         post_want_items (
           id, acceptable_game_ids, min_tier, max_tier, quantity, require_together
+        ),
+        post_images (
+          id, s3_key
         )
         `,
       )
@@ -85,6 +91,10 @@ export default async function PostDetailPage({
   }
 
   const isOwnPost = post.author_id === user.id;
+  const images = post.post_images.map((image) => ({
+    id: image.id,
+    url: postImageUrl(image.s3_key),
+  }));
 
   const [{ data: wantGames }, { data: proposals }, { data: games }, { data: sections }] =
     await Promise.all([
@@ -160,6 +170,22 @@ export default async function PostDetailPage({
           ? "you"
           : (post.profiles_public?.display_name ?? "a Gator Trade user")}
       </p>
+
+      {isOwnPost ? (
+        <section className="mt-8">
+          <h2 className="text-sm font-semibold text-gray-700">Photos</h2>
+          <div className="mt-2">
+            <ImageUploader postId={post.id} existingImages={images} />
+          </div>
+        </section>
+      ) : images.length > 0 ? (
+        <section className="mt-8">
+          <h2 className="text-sm font-semibold text-gray-700">Photos</h2>
+          <div className="mt-2">
+            <PostImageGallery images={images} />
+          </div>
+        </section>
+      ) : null}
 
       <section className="mt-8">
         <h2 className="text-sm font-semibold text-gray-700">Offering</h2>

@@ -3,6 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { findGamePosts, type BrowseFilters } from "@/lib/matching/upgrade-finder";
+import { postImageUrl } from "@/lib/aws/cloudfront";
+import { PostThumbnail } from "@/components/post-images/post-thumbnail";
 import { BrowseFiltersForm } from "./browse-filters-form";
 
 export const metadata: Metadata = {
@@ -121,36 +123,41 @@ export default async function GameBrowsePage({
             <Link
               key={post.id}
               href={`/posts/${post.id}`}
-              className="block rounded-md border border-gray-200 p-4 hover:border-orange-300 hover:bg-orange-50"
+              className="flex gap-4 rounded-md border border-gray-200 p-4 hover:border-orange-300 hover:bg-orange-50"
             >
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-gray-900">
-                  {formatCash(post.cashDeltaCents)}
-                </span>
-                {post.wantItemCount === 0 ? (
-                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
-                    Cash sale
+              <PostThumbnail
+                url={post.thumbnailKey ? postImageUrl(post.thumbnailKey) : null}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-gray-900">
+                    {formatCash(post.cashDeltaCents)}
                   </span>
-                ) : null}
+                  {post.wantItemCount === 0 ? (
+                    <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                      Cash sale
+                    </span>
+                  ) : null}
+                </div>
+                <ul className="mt-2 space-y-1 text-sm text-gray-600">
+                  {post.offerItems.map((item) => (
+                    <li key={item.id}>
+                      {item.quantity}×{" "}
+                      {item.ticketType === "general_admission"
+                        ? "general admission"
+                        : `Section ${item.sectionCode}${
+                            item.tier ? ` (tier ${item.tier})` : ""
+                          }`}
+                      {item.rowLabel ? `, row ${item.rowLabel}` : ""}
+                      {item.seatLabels && item.seatLabels.length > 0
+                        ? `, seats ${item.seatLabels.join(", ")}${
+                            item.seatsAdjacent ? " (together)" : ""
+                          }`
+                        : ""}
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <ul className="mt-2 space-y-1 text-sm text-gray-600">
-                {post.offerItems.map((item) => (
-                  <li key={item.id}>
-                    {item.quantity}×{" "}
-                    {item.ticketType === "general_admission"
-                      ? "general admission"
-                      : `Section ${item.sectionCode}${
-                          item.tier ? ` (tier ${item.tier})` : ""
-                        }`}
-                    {item.rowLabel ? `, row ${item.rowLabel}` : ""}
-                    {item.seatLabels && item.seatLabels.length > 0
-                      ? `, seats ${item.seatLabels.join(", ")}${
-                          item.seatsAdjacent ? " (together)" : ""
-                        }`
-                      : ""}
-                  </li>
-                ))}
-              </ul>
             </Link>
           ))
         )}

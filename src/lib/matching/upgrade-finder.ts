@@ -35,6 +35,7 @@ export type PostResult = {
   notes: string | null;
   offerItems: OfferItemResult[];
   wantItemCount: number;
+  thumbnailKey: string | null;
 };
 
 // Derives adjacency from seat_labels rather than trusting a client
@@ -121,11 +122,13 @@ async function queryWithTierFilter(
         id, ticket_type, section_code, row_label, seat_labels, quantity, game_id,
         sections!inner ( tier, level )
       ),
-      post_want_items ( id )
+      post_want_items ( id ),
+      post_images ( s3_key, created_at )
       `,
     )
     .eq("status", "open")
-    .eq("post_offer_items.game_id", gameId);
+    .eq("post_offer_items.game_id", gameId)
+    .order("created_at", { referencedTable: "post_images", ascending: true });
 
   if (filters.myTier !== null) {
     query = query.lt("post_offer_items.sections.tier", filters.myTier);
@@ -151,11 +154,13 @@ async function queryWithoutTierFilter(
         id, ticket_type, section_code, row_label, seat_labels, quantity, game_id,
         sections ( tier, level )
       ),
-      post_want_items ( id )
+      post_want_items ( id ),
+      post_images ( s3_key, created_at )
       `,
     )
     .eq("status", "open")
-    .eq("post_offer_items.game_id", gameId);
+    .eq("post_offer_items.game_id", gameId)
+    .order("created_at", { referencedTable: "post_images", ascending: true });
 
   return applyCommonFilters(query, filters).order("cash_delta_cents", {
     ascending: true,
@@ -190,6 +195,7 @@ export async function findGamePosts(
         .filter((item) => item.game_id === gameId)
         .map(toOfferItemResult),
       wantItemCount: post.post_want_items.length,
+      thumbnailKey: post.post_images[0]?.s3_key ?? null,
     }));
 
   if (filters.cashOnly) {

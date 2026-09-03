@@ -1,13 +1,14 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
   createPostSchema,
   type CreatePostInput,
 } from "@/lib/validation/posts";
 
-export type CreatePostState = { error: string | null };
+export type CreatePostState =
+  | { error: string; postId: null }
+  | { error: null; postId: string };
 
 export async function createPost(
   input: CreatePostInput,
@@ -15,12 +16,15 @@ export async function createPost(
   const parsed = createPostSchema.safeParse(input);
 
   if (!parsed.success) {
-    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+    return {
+      error: parsed.error.issues[0]?.message ?? "Invalid input",
+      postId: null,
+    };
   }
 
   const supabase = await createClient();
 
-  const { error } = await supabase.rpc("create_post", {
+  const { data: postId, error } = await supabase.rpc("create_post", {
     p_cash_delta_cents: parsed.data.cashDeltaCents,
     p_notes: parsed.data.notes ?? undefined,
     p_offer_items: parsed.data.offerItems.map((item) => ({
@@ -41,8 +45,11 @@ export async function createPost(
   });
 
   if (error) {
-    return { error: error.message };
+    return { error: error.message, postId: null };
+  }
+  if (!postId) {
+    return { error: "Post creation did not return an id", postId: null };
   }
 
-  redirect("/");
+  return { error: null, postId };
 }
