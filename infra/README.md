@@ -39,3 +39,8 @@ npm run deploy  # cdk deploy
 After deploy, take the `BucketName` and `DistributionDomainName` outputs
 and set them as `S3_BUCKET_NAME` and `CLOUDFRONT_DOMAIN` in Amplify
 environment variables (see `.env.example` at the repo root).
+
+Do not set `AWS_REGION` in Amplify. Amplify reserves the `AWS_` prefix
+and sets `AWS_REGION` itself at runtime, which already matches this
+stack's `us-east-2`. `AWS_REGION` only needs to be set locally, in
+`.env.local`.
