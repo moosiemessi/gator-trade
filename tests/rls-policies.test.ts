@@ -108,8 +108,8 @@ describe("RLS policies", () => {
     if (openPostError || !openPost) throw openPostError;
     openPostId = openPost.id;
 
-    // B proposes on A's open post, A accepts it — both through the real
-    // insert/update policies, not the admin client.
+    // B proposes on A's open post — through the real insert policy, not
+    // the admin client.
     const { data: acceptedProposal, error: proposalError } =
       await userB.client
         .from("proposals")
@@ -123,14 +123,12 @@ describe("RLS policies", () => {
     if (proposalError || !acceptedProposal) throw proposalError;
     acceptedProposalId = acceptedProposal.id;
 
-    const { error: acceptError } = await userA.client
-      .from("proposals")
-      .update({ status: "accepted" })
-      .eq("id", acceptedProposalId);
-    if (acceptError) throw acceptError;
-
-    // C proposes on the same open post. B has no part in this one — used
-    // for the "can't read a proposal on a post you're not party to" case.
+    // C proposes on the same post. B has no part in this one — used for
+    // the "can't read a proposal on a post you're not party to" case. This
+    // has to happen before A accepts B's proposal below: accepting moves
+    // the post out of 'open' (step 8's trigger), and
+    // proposals_insert_verified_non_author only allows new proposals on an
+    // open post.
     const { data: outsiderProposal, error: outsiderError } =
       await userC.client
         .from("proposals")
@@ -144,13 +142,18 @@ describe("RLS policies", () => {
     if (outsiderError || !outsiderProposal) throw outsiderError;
     outsiderProposalId = outsiderProposal.id;
 
-    // Step 8 adds the accept trigger that creates this row automatically;
-    // until then, seed it with the admin client so the handoff
-    // column-protection trigger can be exercised here.
-    const { data: handoff, error: handoffError } = await admin
+    const { error: acceptError } = await userA.client
+      .from("proposals")
+      .update({ status: "accepted" })
+      .eq("id", acceptedProposalId);
+    if (acceptError) throw acceptError;
+
+    // Step 8's accept trigger creates this row automatically, so it's read
+    // back here (through the real select policy) rather than seeded.
+    const { data: handoff, error: handoffError } = await userB.client
       .from("handoffs")
-      .insert({ proposal_id: acceptedProposalId })
       .select("id")
+      .eq("proposal_id", acceptedProposalId)
       .single();
     if (handoffError || !handoff) throw handoffError;
     handoffId = handoff.id;
@@ -219,5 +222,38 @@ describe("RLS policies", () => {
       .eq("id", userB.id);
 
     expect(error).not.toBeNull();
+  });
+
+  it("blocks another user from updating your post", async () => {
+    const { data, error } = await userB.client
+      .from("posts")
+      .update({ notes: "hijacked" })
+      .eq("id", openPostId)
+      .select("id");
+
+    expect(error).toBeNull();
+    expect(data).toEqual([]);
+  });
+
+  it("blocks the author from updating a post that isn't open", async () => {
+    // No user-facing action reaches 'completed' yet (step 9's handoff
+    // completion is future work), so the admin client stands in for it —
+    // the point here is posts_update_open_author's status = 'open' guard,
+    // not how a post gets to 'completed'.
+    const { data: completedPost, error: completedPostError } = await admin
+      .from("posts")
+      .insert({ author_id: userA.id, cash_delta_cents: 0, status: "completed" })
+      .select("id")
+      .single();
+    if (completedPostError || !completedPost) throw completedPostError;
+
+    const { data, error } = await userA.client
+      .from("posts")
+      .update({ notes: "still editable?" })
+      .eq("id", completedPost.id)
+      .select("id");
+
+    expect(error).toBeNull();
+    expect(data).toEqual([]);
   });
 });

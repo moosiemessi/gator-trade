@@ -29,3 +29,19 @@ export const createPostSchema = z.object({
 });
 
 export type CreatePostInput = z.infer<typeof createPostSchema>;
+
+export const updatePostSchema = createPostSchema.extend({
+  postId: uuid,
+  // Whether cash delta, offer items, or want slots changed from what's
+  // stored — decided by the form, which holds both the loaded values and
+  // the submitted ones. A notes-only save leaves pending proposals alone.
+  declinePending: z.boolean(),
+});
+
+export type UpdatePostInput = z.infer<typeof updatePostSchema>;
+
+export const withdrawPostSchema = z.object({
+  postId: uuid,
+});
+
+export type WithdrawPostInput = z.infer<typeof withdrawPostSchema>;

@@ -7,6 +7,7 @@ import { ImageUploader } from "@/components/post-images/image-uploader";
 import { PostImageGallery } from "@/components/post-images/post-image-gallery";
 import { ProposeForm } from "./propose-form";
 import { ProposalStatusButtons } from "@/app/proposals/proposal-status-buttons";
+import { PostAuthorActions } from "./post-author-actions";
 
 export const metadata: Metadata = {
   title: "Post | Gator Trade",
@@ -170,6 +171,10 @@ export default async function PostDetailPage({
           ? "you"
           : (post.profiles_public?.display_name ?? "a Gator Trade user")}
       </p>
+
+      {isOwnPost && post.status === "open" ? (
+        <PostAuthorActions postId={post.id} />
+      ) : null}
 
       {isOwnPost ? (
         <section className="mt-8">

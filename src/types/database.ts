@@ -588,6 +588,17 @@ export type Database = {
       has_accepted_proposal: { Args: { p_post_id: string }; Returns: boolean }
       is_verified_student: { Args: never; Returns: boolean }
       owns_post: { Args: { p_id: string }; Returns: boolean }
+      update_post: {
+        Args: {
+          p_cash_delta_cents: number
+          p_decline_pending?: boolean
+          p_notes?: string
+          p_offer_items?: Json
+          p_post_id: string
+          p_want_slots?: Json
+        }
+        Returns: string
+      }
     }
     Enums: {
       post_status: "open" | "pending" | "completed" | "withdrawn" | "expired"

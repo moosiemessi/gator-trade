@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { createPostSchema } from "@/lib/validation/posts";
+import { createPostSchema, type CreatePostInput } from "@/lib/validation/posts";
 import { ImageUploader } from "@/components/post-images/image-uploader";
 import { createPost } from "./actions";
+import { updatePost } from "@/app/posts/[id]/edit/actions";
 
 type Game = {
   id: string;
@@ -19,7 +21,7 @@ type Section = {
   level: string;
 };
 
-type OfferItemState = {
+export type OfferItemState = {
   gameId: string;
   ticketType: "assigned" | "general_admission";
   sectionCode: string;
@@ -28,7 +30,7 @@ type OfferItemState = {
   quantity: number;
 };
 
-type WantSlotState = {
+export type WantSlotState = {
   acceptableGameIds: string[];
   minTier: string;
   maxTier: string;
@@ -37,6 +39,24 @@ type WantSlotState = {
 };
 
 type CashDirection = "you_pay" | "they_pay" | "even";
+
+type PostFormProps =
+  | {
+      mode?: "create";
+      games: Game[];
+      sections: Section[];
+    }
+  | {
+      mode: "edit";
+      games: Game[];
+      sections: Section[];
+      postId: string;
+      initialCashDeltaCents: number;
+      initialNotes: string;
+      initialOfferItems: OfferItemState[];
+      initialWantSlots: WantSlotState[];
+      pendingProposalsCount: number;
+    };
 
 function gameLabel(game: Game) {
   const date = new Date(game.kickoff_at).toLocaleDateString(undefined, {
@@ -50,68 +70,95 @@ function sectionLabel(section: Section) {
   return `Section ${section.code} (tier ${section.tier}, ${section.level})`;
 }
 
-export function PostForm({
-  games,
-  sections,
-}: {
-  games: Game[];
-  sections: Section[];
-}) {
-  const [defaultGameId, setDefaultGameId] = useState(games[0]?.id ?? "");
-  const [offerItems, setOfferItems] = useState<OfferItemState[]>([
-    {
-      gameId: games[0]?.id ?? "",
-      ticketType: "assigned",
-      sectionCode: "",
-      rowLabel: "",
-      seatLabelsRaw: "",
-      quantity: 1,
-    },
-  ]);
-  const [wantSlots, setWantSlots] = useState<WantSlotState[]>([
-    {
-      acceptableGameIds: games[0] ? [games[0].id] : [],
-      minTier: "",
-      maxTier: "",
-      quantity: 1,
-      requireTogether: false,
-    },
-  ]);
-  const [cashAmount, setCashAmount] = useState("");
-  const [cashDirection, setCashDirection] = useState<CashDirection>("even");
-  const [notes, setNotes] = useState("");
+function blankOfferItem(gameId: string): OfferItemState {
+  return {
+    gameId,
+    ticketType: "assigned",
+    sectionCode: "",
+    rowLabel: "",
+    seatLabelsRaw: "",
+    quantity: 1,
+  };
+}
+
+function blankWantSlot(gameId: string): WantSlotState {
+  return {
+    acceptableGameIds: gameId ? [gameId] : [],
+    minTier: "",
+    maxTier: "",
+    quantity: 1,
+    requireTogether: false,
+  };
+}
+
+// Normalized, order-independent comparison of the two arrays a save
+// touches (offer items, want slots), so reordering rows in the form isn't
+// mistaken for a structural change.
+function unorderedEqual(a: unknown[], b: unknown[]): boolean {
+  const normalize = (items: unknown[]) =>
+    items.map((item) => JSON.stringify(item)).sort().join("|");
+  return normalize(a) === normalize(b);
+}
+
+export function PostForm(props: PostFormProps) {
+  const { games, sections } = props;
+  const router = useRouter();
+
+  const [defaultGameId, setDefaultGameId] = useState(
+    props.mode === "edit"
+      ? (props.initialOfferItems[0]?.gameId ?? games[0]?.id ?? "")
+      : (games[0]?.id ?? ""),
+  );
+  const [offerItems, setOfferItems] = useState<OfferItemState[]>(
+    props.mode === "edit" ? props.initialOfferItems : [blankOfferItem(defaultGameId)],
+  );
+  const [wantSlots, setWantSlots] = useState<WantSlotState[]>(
+    props.mode === "edit" ? props.initialWantSlots : [blankWantSlot(defaultGameId)],
+  );
+  const initialCashAmount =
+    props.mode === "edit"
+      ? props.initialCashDeltaCents === 0
+        ? ""
+        : (Math.abs(props.initialCashDeltaCents) / 100).toString()
+      : "";
+  const initialCashDirection: CashDirection =
+    props.mode === "edit"
+      ? props.initialCashDeltaCents > 0
+        ? "they_pay"
+        : props.initialCashDeltaCents < 0
+          ? "you_pay"
+          : "even"
+      : "even";
+  const [cashAmount, setCashAmount] = useState(initialCashAmount);
+  const [cashDirection, setCashDirection] = useState<CashDirection>(initialCashDirection);
+  const [notes, setNotes] = useState(props.mode === "edit" ? props.initialNotes : "");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [createdPostId, setCreatedPostId] = useState<string | null>(null);
+  const [pendingSave, setPendingSave] = useState<CreatePostInput | null>(null);
 
   function updateOfferItem(index: number, patch: Partial<OfferItemState>) {
     setOfferItems((items) =>
       items.map((item, i) => (i === index ? { ...item, ...patch } : item)),
     );
+    setPendingSave(null);
   }
 
   function addOfferItem() {
-    setOfferItems((items) => [
-      ...items,
-      {
-        gameId: defaultGameId,
-        ticketType: "assigned",
-        sectionCode: "",
-        rowLabel: "",
-        seatLabelsRaw: "",
-        quantity: 1,
-      },
-    ]);
+    setOfferItems((items) => [...items, blankOfferItem(defaultGameId)]);
+    setPendingSave(null);
   }
 
   function removeOfferItem(index: number) {
     setOfferItems((items) => items.filter((_, i) => i !== index));
+    setPendingSave(null);
   }
 
   function updateWantSlot(index: number, patch: Partial<WantSlotState>) {
     setWantSlots((slots) =>
       slots.map((slot, i) => (i === index ? { ...slot, ...patch } : slot)),
     );
+    setPendingSave(null);
   }
 
   function toggleWantSlotGame(index: number, gameId: string) {
@@ -127,49 +174,32 @@ export function PostForm({
         };
       }),
     );
+    setPendingSave(null);
   }
 
   function addWantSlot() {
-    setWantSlots((slots) => [
-      ...slots,
-      {
-        acceptableGameIds: defaultGameId ? [defaultGameId] : [],
-        minTier: "",
-        maxTier: "",
-        quantity: 1,
-        requireTogether: false,
-      },
-    ]);
+    setWantSlots((slots) => [...slots, blankWantSlot(defaultGameId)]);
+    setPendingSave(null);
   }
 
   function removeWantSlot(index: number) {
     setWantSlots((slots) => slots.filter((_, i) => i !== index));
+    setPendingSave(null);
   }
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-
+  function buildPayload() {
     const cents = Math.round((Number(cashAmount) || 0) * 100);
     const cashDeltaCents =
-      cashDirection === "you_pay"
-        ? -cents
-        : cashDirection === "they_pay"
-          ? cents
-          : 0;
+      cashDirection === "you_pay" ? -cents : cashDirection === "they_pay" ? cents : 0;
 
-    const payload = {
+    return {
       offerItems: offerItems.map((item) => ({
         gameId: item.gameId,
         ticketType: item.ticketType,
         sectionCode:
-          item.ticketType === "general_admission"
-            ? null
-            : item.sectionCode || null,
+          item.ticketType === "general_admission" ? null : item.sectionCode || null,
         rowLabel:
-          item.ticketType === "general_admission"
-            ? null
-            : item.rowLabel.trim() || null,
+          item.ticketType === "general_admission" ? null : item.rowLabel.trim() || null,
         seatLabels:
           item.ticketType === "general_admission" || !item.seatLabelsRaw.trim()
             ? null
@@ -189,21 +219,93 @@ export function PostForm({
       cashDeltaCents,
       notes: notes.trim() || null,
     };
+  }
 
+  // Same shape the payload above produces, run over the values the post
+  // was loaded with, so it can be diffed against what's about to be saved.
+  function buildInitialPayload(edit: Extract<PostFormProps, { mode: "edit" }>) {
+    return {
+      offerItems: edit.initialOfferItems.map((item) => ({
+        gameId: item.gameId,
+        ticketType: item.ticketType,
+        sectionCode:
+          item.ticketType === "general_admission" ? null : item.sectionCode || null,
+        rowLabel:
+          item.ticketType === "general_admission" ? null : item.rowLabel.trim() || null,
+        seatLabels:
+          item.ticketType === "general_admission" || !item.seatLabelsRaw.trim()
+            ? null
+            : item.seatLabelsRaw
+                .split(",")
+                .map((s) => s.trim())
+                .filter(Boolean),
+        quantity: item.quantity,
+      })),
+      wantSlots: edit.initialWantSlots.map((slot) => ({
+        acceptableGameIds: slot.acceptableGameIds,
+        minTier: slot.minTier ? Number(slot.minTier) : null,
+        maxTier: slot.maxTier ? Number(slot.maxTier) : null,
+        quantity: slot.quantity,
+        requireTogether: slot.requireTogether,
+      })),
+      cashDeltaCents: edit.initialCashDeltaCents,
+    };
+  }
+
+  function isStructuralChange(data: CreatePostInput): boolean {
+    if (props.mode !== "edit") return false;
+    const initial = buildInitialPayload(props);
+    return (
+      data.cashDeltaCents !== initial.cashDeltaCents ||
+      !unorderedEqual(data.offerItems, initial.offerItems) ||
+      !unorderedEqual(data.wantSlots, initial.wantSlots)
+    );
+  }
+
+  function submitEdit(data: CreatePostInput, declinePending: boolean) {
+    if (props.mode !== "edit") return;
+    const postId = props.postId;
+    startTransition(async () => {
+      const result = await updatePost({ ...data, postId, declinePending });
+      if (result.error !== null) {
+        setError(result.error);
+        return;
+      }
+      setPendingSave(null);
+      router.push(`/posts/${postId}`);
+    });
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+
+    const payload = buildPayload();
     const parsed = createPostSchema.safeParse(payload);
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? "Invalid input");
       return;
     }
 
-    startTransition(async () => {
-      const result = await createPost(parsed.data);
-      if (result.error !== null) {
-        setError(result.error);
-        return;
-      }
-      setCreatedPostId(result.postId);
-    });
+    if (props.mode !== "edit") {
+      startTransition(async () => {
+        const result = await createPost(parsed.data);
+        if (result.error !== null) {
+          setError(result.error);
+          return;
+        }
+        setCreatedPostId(result.postId);
+      });
+      return;
+    }
+
+    const structuralChange = isStructuralChange(parsed.data);
+    if (structuralChange && props.pendingProposalsCount > 0) {
+      setPendingSave(parsed.data);
+      return;
+    }
+
+    submitEdit(parsed.data, structuralChange);
   }
 
   if (createdPostId) {
@@ -523,14 +625,18 @@ export function PostForm({
             min={0}
             step="0.01"
             value={cashAmount}
-            onChange={(e) => setCashAmount(e.target.value)}
+            onChange={(e) => {
+              setCashAmount(e.target.value);
+              setPendingSave(null);
+            }}
             className="w-32 rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
           />
           <select
             value={cashDirection}
-            onChange={(e) =>
-              setCashDirection(e.target.value as CashDirection)
-            }
+            onChange={(e) => {
+              setCashDirection(e.target.value as CashDirection);
+              setPendingSave(null);
+            }}
             className="rounded-md border border-gray-300 px-2 py-1.5 text-sm text-gray-900"
           >
             <option value="even">Even swap, no cash</option>
@@ -546,7 +652,10 @@ export function PostForm({
         </label>
         <textarea
           value={notes}
-          onChange={(e) => setNotes(e.target.value)}
+          onChange={(e) => {
+            setNotes(e.target.value);
+            setPendingSave(null);
+          }}
           rows={3}
           className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900"
         />
@@ -558,13 +667,46 @@ export function PostForm({
         </p>
       ) : null}
 
-      <button
-        type="submit"
-        disabled={isPending}
-        className="w-full rounded-md bg-orange-600 px-4 py-2 font-medium text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {isPending ? "Posting…" : "Post"}
-      </button>
+      {pendingSave && props.mode === "edit" ? (
+        <div className="rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p>
+            Saving will decline {props.pendingProposalsCount} pending
+            proposal{props.pendingProposalsCount === 1 ? "" : "s"}, since
+            you changed the cash amount, offer items, or want slots.
+          </p>
+          <div className="mt-3 flex gap-3">
+            <button
+              type="button"
+              disabled={isPending}
+              onClick={() => submitEdit(pendingSave, true)}
+              className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {isPending ? "Saving…" : "Confirm and save"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setPendingSave(null)}
+              className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="submit"
+          disabled={isPending}
+          className="w-full rounded-md bg-orange-600 px-4 py-2 font-medium text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {isPending
+            ? props.mode === "edit"
+              ? "Saving…"
+              : "Posting…"
+            : props.mode === "edit"
+              ? "Save changes"
+              : "Post"}
+        </button>
+      )}
     </form>
   );
 }
